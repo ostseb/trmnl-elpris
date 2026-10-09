@@ -37,6 +37,7 @@ oauth_fixed_expiry_ms: ''
 custom_fields:
 - keyname: about_elpris
   field_type: author_bio
+  github_url: https://github.com/ostseb/trmnl-elpris
   name: Om pluginen
   category: environment,finance
   learn_more_url: https://www.elprisetjustnu.se
