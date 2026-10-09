@@ -37,18 +37,10 @@ oauth_fixed_expiry_ms: ''
 custom_fields:
 - keyname: about_elpris
   field_type: author_bio
-  github_url: https://github.com/ostseb/trmnl-elpris
   name: Om pluginen
   category: environment,finance
   learn_more_url: https://www.elprisetjustnu.se
-  description: |-
-    Visar dagens spotpris på el i ditt elområde (SE1–SE4) och hjälper dig att hitta de billigaste timmarna för att ladda bilen, köra disk- och tvättmaskin eller värma varmvattnet.
-
-    Stort på skärmen syns priset just nu i öre/kWh, om det är billigt, normalt eller dyrt jämfört med resten av dygnet, när priset nästa gång blir tydligt lägre och vilket sammanhängande fönster (till exempel tre timmar) som är billigast framöver. Stapeldiagrammet visar timpriser från nu och framåt: det billigaste fönstret är svart, övriga lågpristimmar är randiga och morgondagens priser dyker upp när Nord Pool publicerar dem runt klockan 13.
-
-    Du kan välja om priset ska visas med moms och lägga på ditt eget påslag (energiskatt, nätavgift och elhandlarens påslag) för att se vad elen faktiskt kostar dig. Fungerar i alla fyra layouter och i mashups.
-
-    Spotpris per elområde med billigaste timmarna markerade. Elpriser tillhandahålls av <a href="https://www.elprisetjustnu.se" class="underline">Elpriset just nu.se</a>.
+  description: Spotpris per elområde med billigaste timmarna markerade. Elpriser tillhandahålls av <a href="https://www.elprisetjustnu.se" class="underline">Elpriset just nu.se</a>.
 - keyname: area
   field_type: select
   name: Elområde
