@@ -1,0 +1,77 @@
+---
+strategy: polling
+no_screen_padding: 'no'
+dark_mode: 'no'
+static_data: ''
+polling_verb: get
+framework_version: 3.4.0
+serverless_language: ''
+refresh_interval_floor: ''
+polling_url: |-
+  https://www.elprisetjustnu.se/api/v1/prices/{{ "now" | date: "%s" | plus: trmnl.user.utc_offset | date: "%Y/%m-%d" }}_{{ area }}.json
+  https://www.elprisetjustnu.se/api/v1/prices/{{ "now" | date: "%s" | plus: trmnl.user.utc_offset | plus: 86400 | date: "%Y/%m-%d" }}_{{ area }}.json
+  https://api.open-meteo.com/v1/forecast?latitude=59.33&longitude=18.07&current=temperature_2m&timezone=Europe%2FStockholm
+polling_headers: ''
+polling_body: ''
+id: 500991
+oauth_enabled: 'false'
+oauth_pkce_enabled: 'no'
+oauth_authorize_url: ''
+oauth_token_url: ''
+oauth_scopes: ''
+oauth_scope_separator: ''
+oauth_refresh_url: ''
+oauth_auth_params: ''
+oauth_token_headers: ''
+oauth_token_site: ''
+oauth_token_params: ''
+oauth_token_request_auth_method: ''
+oauth_body_format: ''
+oauth_token_response_metadata: ''
+oauth_authorization_method: ''
+oauth_refresh_params: ''
+oauth_token_field_name: ''
+oauth_expiry_field_name: ''
+oauth_expiry_strategy: ''
+oauth_fixed_expiry_ms: ''
+custom_fields:
+- keyname: about_elpris
+  field_type: author_bio
+  name: Om pluginen
+  category: environment,finance
+  learn_more_url: https://www.elprisetjustnu.se
+  description: |-
+    Visar dagens spotpris på el i ditt elområde (SE1–SE4) och hjälper dig att hitta de billigaste timmarna för att ladda bilen, köra disk- och tvättmaskin eller värma varmvattnet.
+
+    Stort på skärmen syns priset just nu i öre/kWh, om det är billigt, normalt eller dyrt jämfört med resten av dygnet, när priset nästa gång blir tydligt lägre och vilket sammanhängande fönster (till exempel tre timmar) som är billigast framöver. Stapeldiagrammet visar timpriser från nu och framåt: det billigaste fönstret är svart, övriga lågpristimmar är randiga och morgondagens priser dyker upp när Nord Pool publicerar dem runt klockan 13.
+
+    Du kan välja om priset ska visas med moms och lägga på ditt eget påslag (energiskatt, nätavgift och elhandlarens påslag) för att se vad elen faktiskt kostar dig. Fungerar i alla fyra layouter och i mashups.
+
+    Spotpris per elområde med billigaste timmarna markerade. Elpriser tillhandahålls av <a href="https://www.elprisetjustnu.se" class="underline">Elpriset just nu.se</a>.
+- keyname: area
+  field_type: select
+  name: Elområde
+  options:
+  - Norra Sverige (SE1): SE1
+  - Norra Mellansverige (SE2): SE2
+  - Södra Mellansverige (SE3): SE3
+  - Södra Sverige (SE4): SE4
+  default: SE3
+- keyname: vat
+  field_type: boolean
+  name: Visa med moms (25 %)
+  default: true
+- keyname: addon_ore
+  field_type: number
+  name: Påslag (öre/kWh)
+  description: Läggs på spotpriset före moms, t.ex. energiskatt + elnätets överföringsavgift + elhandlarens påslag. 0 = rent spotpris.
+  default: 0
+  optional: true
+- keyname: cheap_hours
+  field_type: number
+  name: Billigaste fönster (timmar)
+  description: Längd på det billigaste sammanhängande fönstret som markeras, t.ex. 3 för en diskmaskin eller 6 för billaddning.
+  default: 3
+name: Elpris – billigaste timmarna
+description: Spotpris och billigaste timmarna
+refresh_interval: 15

@@ -1,0 +1,36 @@
+<div class="layout layout--row layout--stretch-cross gap--large">
+  <div class="flex flex--col flex--between w--60 shrink-0">
+    <div class="flex flex--col flex--left">
+      <span class="label">Just nu</span>
+      <div><span class="value value--xlarge value--tnums" data-ep="now">–</span> <span class="title">öre</span></div>
+      <span class="label label--filled" data-ep="level"></span>
+    </div>
+    <div class="item"><div class="content">
+      <span class="label label--small">Billigare</span>
+      <span class="title title--small" data-ep="cheaper">–</span>
+    </div></div>
+    <div class="item"><div class="content">
+      <span class="label label--small" data-ep="cheap-label">Billigaste fönster</span>
+      <span class="title title--small" data-ep="cheap">–</span>
+    </div></div>
+    <div class="item"><div class="content">
+      <span class="label label--small">Idag min / snitt / max</span>
+      <span class="title title--small value--tnums" data-ep="day">–</span>
+    </div></div>
+  </div>
+  <div class="flex flex--col grow">
+    <div class="grow w--full h--min-72" data-ep="chart"></div>
+    <span class="description text--right">▼ nu · svart = billigaste fönstret · randigt = lågpris</span>
+  </div>
+</div>
+<script>
+  (function () {
+    const root = document.currentScript.previousElementSibling;
+    const E = window.ELPRIS_CURRENT;
+    document.addEventListener("DOMContentLoaded", function () { window.elprisFill(root, E); });
+  })();
+</script>
+<div class="title_bar">
+  <span class="title">Elpris {{ cf.area | default: "SE3" }}</span>
+  <span class="instance">öre/kWh{% if vat_on %} inkl. moms{% endif %}</span>
+</div>

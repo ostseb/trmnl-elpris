@@ -1,0 +1,13 @@
+<div class="layout layout--col layout--center gap--small">
+  <div><span class="value value--large value--tnums" data-ep="now">–</span> <span class="title title--small">öre</span></div>
+  <span class="description" data-ep="cheaper-short"></span>
+  <span class="description" data-ep="cheap-short"></span>
+</div>
+<script>
+  (function () {
+    const root = document.currentScript.previousElementSibling;
+    const E = window.ELPRIS_CURRENT;
+    document.addEventListener("DOMContentLoaded", function () { window.elprisFill(root, E); });
+  })();
+</script>
+<div class="title_bar"><span class="title">Elpris {{ cf.area | default: "SE3" }}</span></div>

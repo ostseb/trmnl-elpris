@@ -1,0 +1,17 @@
+<div class="layout layout--col layout--stretch gap--medium">
+  <div>
+    <span class="label">Just nu</span>
+    <div><span class="value value--xlarge value--tnums" data-ep="now">–</span> <span class="title">öre</span></div>
+  </div>
+  <div class="item"><div class="content"><span class="label label--small">Billigare</span><span class="title title--small" data-ep="cheaper">–</span></div></div>
+  <div class="item"><div class="content"><span class="label label--small" data-ep="cheap-label">Billigaste fönster</span><span class="title title--small" data-ep="cheap">–</span></div></div>
+  <div class="grow w--full h--min-36" data-ep="chart" data-compact="true" data-max-bars="18"></div>
+</div>
+<script>
+  (function () {
+    const root = document.currentScript.previousElementSibling;
+    const E = window.ELPRIS_CURRENT;
+    document.addEventListener("DOMContentLoaded", function () { window.elprisFill(root, E); });
+  })();
+</script>
+<div class="title_bar"><span class="title">Elpris {{ cf.area | default: "SE3" }}</span></div>

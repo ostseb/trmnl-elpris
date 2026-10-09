@@ -1,0 +1,150 @@
+{%- comment -%}
+  All price maths happens client-side so "now" is the render time.
+  window.ELPRIS_CURRENT = this instance's merged 15-min prices for today + tomorrow (if published), in öre/kWh.
+  Each layout grabs it synchronously right after its markup, so several instances can share a mashup.
+{%- endcomment -%}
+{%- assign cf = trmnl.plugin_settings.custom_fields_values -%}
+{%- comment -%} Boolean form field: unset means on (the default). {%- endcomment -%}
+{%- assign vat_on = true -%}
+{%- if cf.vat == false or cf.vat == "false" or cf.vat == "no" -%}{%- assign vat_on = false -%}{%- endif -%}
+<script>
+  (function () {
+    const today = {{ IDX_0.data | default: IDX_0 | json }};
+    const tomorrow = {{ IDX_1.data | default: IDX_1 | json }};
+    const vat = {{ vat_on }};
+    const addon = parseFloat("{{ cf.addon_ore | default: 0 }}") || 0;
+    const cheapHours = parseInt("{{ cf.cheap_hours | default: 3 }}", 10) || 3;
+    const rows = [].concat(Array.isArray(today) ? today : [], Array.isArray(tomorrow) ? tomorrow : []);
+    const seen = new Set();
+    const prices = rows
+      .filter(r => r && r.time_start && !seen.has(r.time_start) && seen.add(r.time_start))
+      .map(r => ({
+        start: new Date(r.time_start),
+        end: new Date(r.time_end),
+        ore: (r.SEK_per_kWh * 100 + addon) * (vat ? 1.25 : 1),
+      }))
+      .sort((a, b) => a.start - b.start);
+    window.ELPRIS_CURRENT = { prices, cheapHours, vat, addon };
+  })();
+</script>
+<script>
+  // Shared helpers used by every layout.
+  window.elprisCompute = function (E) {
+    const { prices, cheapHours } = E;
+    const now = new Date();
+    const fmt = d => d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Stockholm" });
+    const dayKey = d => d.toLocaleDateString("sv-SE", { timeZone: "Europe/Stockholm" });
+    const round = v => Math.round(v);
+    const current = prices.find(p => p.start <= now && now < p.end) || null;
+    const ahead = prices.filter(p => p.end > now);
+    const todays = prices.filter(p => dayKey(p.start) === dayKey(now));
+    const stats = arr => arr.length ? {
+      min: Math.min(...arr.map(p => p.ore)),
+      max: Math.max(...arr.map(p => p.ore)),
+      avg: arr.reduce((s, p) => s + p.ore, 0) / arr.length,
+    } : null;
+
+    // Hourly averages from the current hour onwards (15-min data is too dense for e-ink bars).
+    const hours = [];
+    for (const p of ahead) {
+      const h = new Date(p.start); h.setMinutes(0, 0, 0);
+      let last = hours[hours.length - 1];
+      if (!last || last.start.getTime() !== h.getTime()) hours.push(last = { start: h, sum: 0, n: 0 });
+      last.sum += p.ore; last.n++;
+    }
+    hours.forEach(h => { h.ore = h.sum / h.n; });
+
+    // Cheapest contiguous window of `cheapHours` hours among the upcoming hours.
+    let cheapest = null;
+    for (let i = 0; i + cheapHours <= hours.length; i++) {
+      const avg = hours.slice(i, i + cheapHours).reduce((s, h) => s + h.ore, 0) / cheapHours;
+      if (!cheapest || avg < cheapest.avg) cheapest = { i, avg, start: hours[i].start, end: new Date(hours[i].start.getTime() + cheapHours * 3600e3) };
+    }
+
+    // Next upcoming quarter that is clearly (>=10 %) cheaper than right now.
+    let cheaperAt = null;
+    if (current) cheaperAt = ahead.find(p => p.start > now && p.ore <= current.ore * 0.9) || null;
+    const lowest = ahead.reduce((m, p) => (!m || p.ore < m.ore ? p : m), null);
+
+    const day = stats(todays);
+    let level = null;
+    if (current && day) {
+      const span = day.max - day.min || 1;
+      const pos = (current.ore - day.min) / span;
+      level = pos < 0.25 ? "Billigt" : pos > 0.75 ? "Dyrt" : "Normalt";
+    }
+    return { now, current, ahead, hours, cheapest, cheaperAt, lowest, day, level, fmt, round };
+  };
+
+  // Hourly bar chart as inline SVG. Cheapest window = solid black, current hour = arrow,
+  // other hours = outlined; lowest hour labelled with its price.
+  window.elprisChart = function (el, c, E, opts) {
+    opts = opts || {};
+    const maxBars = opts.maxBars || 36;
+    const hours = c.hours.slice(0, maxBars);
+    if (!hours.length) { el.innerHTML = "<span class='description'>Inga priser tillgängliga</span>"; return; }
+    const W = el.clientWidth, H = el.clientHeight;
+    const padL = 34, padB = opts.compact ? 18 : 24, padT = 22;
+    const max = Math.max(...hours.map(h => h.ore), 1);
+    const min = Math.min(0, ...hours.map(h => h.ore));
+    const cw = (W - padL - 2) / hours.length;
+    const y = v => padT + (H - padT - padB) * (1 - (v - min) / (max - min));
+    const fs = opts.compact ? 14 : 16;
+    let s = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="${fs}">`;
+    s += `<defs><pattern id="ep-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="black"/></pattern></defs>`;
+    // "Low" hours: in the cheapest quarter of the upcoming range -> hatched.
+    const upMin = Math.min(...hours.map(h => h.ore)), upMax = Math.max(...hours.map(h => h.ore));
+    const isLow = h => h.ore <= upMin + (upMax - upMin) * 0.25;
+    // gridlines
+    const step = max > 300 ? 100 : max > 120 ? 50 : 25;
+    for (let v = 0; v <= max; v += step) {
+      s += `<line x1="${padL}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="black" stroke-width="1" stroke-dasharray="2 4"/>`;
+      s += `<text x="${padL - 6}" y="${y(v) + 5}" text-anchor="end">${v}</text>`;
+    }
+    const minIdx = hours.reduce((m, h, i) => (h.ore < hours[m].ore ? i : m), 0);
+    hours.forEach((h, i) => {
+      const x = padL + i * cw + 1.5, w = Math.max(cw - 3, 2);
+      const top = y(Math.max(h.ore, 0)), bottom = y(Math.min(h.ore, 0));
+      const cheap = c.cheapest && i >= c.cheapest.i && i < c.cheapest.i + E.cheapHours;
+      const fill = cheap ? "black" : isLow(h) ? "url(#ep-hatch)" : "white";
+      s += cheap
+        ? `<rect x="${x}" y="${top}" width="${w}" height="${Math.max(bottom - top, 2)}" fill="black"/>`
+        : `<rect x="${x + 1}" y="${top + 1}" width="${w - 2}" height="${Math.max(bottom - top - 2, 1)}" fill="${fill}" stroke="black" stroke-width="2"/>`;
+      const hr = parseInt(h.start.toLocaleString("sv-SE", { hour: "2-digit", timeZone: "Europe/Stockholm" }), 10);
+      if (hr % (opts.compact ? 6 : 3) === 0) s += `<text x="${x + w / 2}" y="${H - 4}" text-anchor="middle">${String(hr).padStart(2, "0")}</text>`;
+      if (hr === 0 && i > 0) {
+        s += `<line x1="${x - 1.5}" x2="${x - 1.5}" y1="${padT - 6}" y2="${H - padB}" stroke="black" stroke-width="2"/>`;
+        if (!opts.compact) s += `<text x="${x + 3}" y="${padT - 6}" font-weight="bold">${h.start.toLocaleDateString("sv-SE", { weekday: "long", timeZone: "Europe/Stockholm" })}</text>`;
+      }
+      if (i === minIdx && !opts.compact) s += `<text x="${x + w / 2}" y="${top - 6}" text-anchor="middle" font-weight="bold">${Math.round(h.ore)}</text>`;
+    });
+    // "now" marker over the first bar
+    const nx = padL + cw / 2;
+    s += `<path d="M ${nx - 7} 2 L ${nx + 7} 2 L ${nx} 13 Z" fill="black"/>`;
+    s += "</svg>";
+    el.innerHTML = s;
+  };
+
+  // Fills every [data-ep="…"] element inside `root` (this view's .layout).
+  window.elprisFill = function (root, E) {
+    const c = window.elprisCompute(E);
+    const set = (key, text) => root.querySelectorAll(`[data-ep="${key}"]`).forEach(el => { el.textContent = text; });
+    const atCheapest = !c.cheaperAt;
+    if (c.current) set("now", c.round(c.current.ore));
+    root.querySelectorAll('[data-ep="level"]').forEach(el => {
+      if (c.level) el.textContent = c.level; else el.classList.add("hidden");
+    });
+    set("cheaper", atCheapest ? "Nu är som billigast" : "kl " + c.fmt(c.cheaperAt.start) + " · " + c.round(c.cheaperAt.ore) + " öre");
+    set("cheaper-short", atCheapest ? "Nu är som billigast" : "Billigare kl " + c.fmt(c.cheaperAt.start));
+    set("cheap-label", "Billigaste " + E.cheapHours + " h");
+    if (c.cheapest) {
+      set("cheap", c.fmt(c.cheapest.start) + "–" + c.fmt(c.cheapest.end) + " · " + c.round(c.cheapest.avg) + " öre");
+      set("cheap-short", "Billigast " + c.fmt(c.cheapest.start) + "–" + c.fmt(c.cheapest.end));
+    }
+    if (c.day) set("day", c.round(c.day.min) + " / " + c.round(c.day.avg) + " / " + c.round(c.day.max));
+    root.querySelectorAll('[data-ep="chart"]').forEach(el => window.elprisChart(el, c, E, {
+      compact: el.dataset.compact === "true",
+      maxBars: parseInt(el.dataset.maxBars || "36", 10),
+    }));
+  };
+</script>
