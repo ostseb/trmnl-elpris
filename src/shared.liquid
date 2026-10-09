@@ -44,21 +44,19 @@
       avg: arr.reduce((s, p) => s + p.ore, 0) / arr.length,
     } : null;
 
-    // Hourly averages from the current hour onwards (15-min data is too dense for e-ink bars).
-    const hours = [];
-    for (const p of ahead) {
-      const h = new Date(p.start); h.setMinutes(0, 0, 0);
-      let last = hours[hours.length - 1];
-      if (!last || last.start.getTime() !== h.getTime()) hours.push(last = { start: h, sum: 0, n: 0 });
-      last.sum += p.ore; last.n++;
-    }
-    hours.forEach(h => { h.ore = h.sum / h.n; });
+    // Upcoming price slots (15 min from elprisetjustnu.se; the slot length is read from the data,
+    // so hourly data would work too).
+    const slots = ahead;
+    const slotMs = slots.length ? slots[0].end - slots[0].start : 900e3;
+    const windowSlots = Math.max(1, Math.round(cheapHours * 3600e3 / slotMs));
 
-    // Cheapest contiguous window of `cheapHours` hours among the upcoming hours.
+    // Cheapest contiguous window of `cheapHours` hours, on slot boundaries.
     let cheapest = null;
-    for (let i = 0; i + cheapHours <= hours.length; i++) {
-      const avg = hours.slice(i, i + cheapHours).reduce((s, h) => s + h.ore, 0) / cheapHours;
-      if (!cheapest || avg < cheapest.avg) cheapest = { i, avg, start: hours[i].start, end: new Date(hours[i].start.getTime() + cheapHours * 3600e3) };
+    for (let i = 0; i + windowSlots <= slots.length; i++) {
+      let sum = 0;
+      for (let k = i; k < i + windowSlots; k++) sum += slots[k].ore;
+      const avg = sum / windowSlots;
+      if (!cheapest || avg < cheapest.avg) cheapest = { i, n: windowSlots, avg, start: slots[i].start, end: slots[i + windowSlots - 1].end };
     }
 
     // Next upcoming quarter that is clearly (>=10 %) cheaper than right now.
@@ -73,52 +71,60 @@
       const pos = (current.ore - day.min) / span;
       level = pos < 0.25 ? "Billigt" : pos > 0.75 ? "Dyrt" : "Normalt";
     }
-    return { now, current, ahead, hours, cheapest, cheaperAt, lowest, day, level, fmt, round };
+    return { now, current, ahead, slots, cheapest, cheaperAt, lowest, day, level, fmt, round };
   };
 
-  // Hourly bar chart as inline SVG. Cheapest window = solid black, current hour = arrow,
-  // other hours = outlined; lowest hour labelled with its price.
+  // 15-minute bar chart as inline SVG, built for 1-bit e-ink:
+  // cheapest window = solid black, low prices = diagonal hatch, others = light dot pattern,
+  // ▼ = now (first bar), thick line + weekday = midnight, lowest price labelled.
   window.elprisChart = function (el, c, E, opts) {
     opts = opts || {};
-    const maxBars = opts.maxBars || 36;
-    const hours = c.hours.slice(0, maxBars);
-    if (!hours.length) { el.innerHTML = "<span class='description'>Inga priser tillgängliga</span>"; return; }
+    const slots = c.slots.slice(0, opts.maxSlots || 96);
+    if (!slots.length) { el.innerHTML = "<span class='description'>Inga priser tillgängliga</span>"; return; }
     const W = el.clientWidth, H = el.clientHeight;
     const padL = 34, padB = opts.compact ? 18 : 24, padT = 22;
-    const max = Math.max(...hours.map(h => h.ore), 1);
-    const min = Math.min(0, ...hours.map(h => h.ore));
-    const cw = (W - padL - 2) / hours.length;
+    const vals = slots.map(p => p.ore);
+    const max = Math.max(...vals, 1), min = Math.min(0, ...vals);
+    const cw = (W - padL - 2) / slots.length;
+    const gap = cw >= 4 ? 1 : 0;
     const y = v => padT + (H - padT - padB) * (1 - (v - min) / (max - min));
     const fs = opts.compact ? 14 : 16;
+    const uid = "ep" + Math.random().toString(36).slice(2, 8); // pattern ids must be unique per mashup view
     let s = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="${fs}">`;
-    s += `<defs><pattern id="ep-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="3" height="6" fill="black"/></pattern></defs>`;
-    // "Low" hours: in the cheapest quarter of the upcoming range -> hatched.
-    const upMin = Math.min(...hours.map(h => h.ore)), upMax = Math.max(...hours.map(h => h.ore));
-    const isLow = h => h.ore <= upMin + (upMax - upMin) * 0.25;
-    // gridlines
+    s += `<defs>
+      <pattern id="${uid}-low" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><rect width="2" height="4" fill="black"/></pattern>
+      <pattern id="${uid}-norm" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="1" height="1" fill="black"/><rect x="2" y="2" width="1" height="1" fill="black"/></pattern>
+    </defs>`;
+    const upMin = Math.min(...vals), upMax = Math.max(...vals);
+    const isLow = v => v <= upMin + (upMax - upMin) * 0.25;
     const step = max > 300 ? 100 : max > 120 ? 50 : 25;
     for (let v = 0; v <= max; v += step) {
       s += `<line x1="${padL}" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="black" stroke-width="1" stroke-dasharray="2 4"/>`;
       s += `<text x="${padL - 6}" y="${y(v) + 5}" text-anchor="end">${v}</text>`;
     }
-    const minIdx = hours.reduce((m, h, i) => (h.ore < hours[m].ore ? i : m), 0);
-    hours.forEach((h, i) => {
-      const x = padL + i * cw + 1.5, w = Math.max(cw - 3, 2);
-      const top = y(Math.max(h.ore, 0)), bottom = y(Math.min(h.ore, 0));
-      const cheap = c.cheapest && i >= c.cheapest.i && i < c.cheapest.i + E.cheapHours;
-      const fill = cheap ? "black" : isLow(h) ? "url(#ep-hatch)" : "white";
-      s += cheap
-        ? `<rect x="${x}" y="${top}" width="${w}" height="${Math.max(bottom - top, 2)}" fill="black"/>`
-        : `<rect x="${x + 1}" y="${top + 1}" width="${w - 2}" height="${Math.max(bottom - top - 2, 1)}" fill="${fill}" stroke="black" stroke-width="2"/>`;
-      const hr = parseInt(h.start.toLocaleString("sv-SE", { hour: "2-digit", timeZone: "Europe/Stockholm" }), 10);
-      if (hr % (opts.compact ? 6 : 3) === 0) s += `<text x="${x + w / 2}" y="${H - 4}" text-anchor="middle">${String(hr).padStart(2, "0")}</text>`;
-      if (hr === 0 && i > 0) {
-        s += `<line x1="${x - 1.5}" x2="${x - 1.5}" y1="${padT - 6}" y2="${H - padB}" stroke="black" stroke-width="2"/>`;
-        if (!opts.compact) s += `<text x="${x + 3}" y="${padT - 6}" font-weight="bold">${h.start.toLocaleDateString("sv-SE", { weekday: "long", timeZone: "Europe/Stockholm" })}</text>`;
+    const minIdx = vals.indexOf(upMin);
+    const hm = d => d.toLocaleTimeString("sv-SE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Stockholm" }).split(":").map(Number);
+    slots.forEach((p, i) => {
+      const x = padL + i * cw, w = Math.max(cw - gap, 1);
+      const top = y(Math.max(p.ore, 0)), bottom = y(Math.min(p.ore, 0));
+      const cheap = c.cheapest && i >= c.cheapest.i && i < c.cheapest.i + c.cheapest.n;
+      const fill = cheap ? "black" : isLow(p.ore) ? `url(#${uid}-low)` : `url(#${uid}-norm)`;
+      s += `<rect x="${x}" y="${top}" width="${w}" height="${Math.max(bottom - top, 2)}" fill="${fill}"/>`;
+      // Thin top edge so patterned bars read as bars.
+      if (!cheap) s += `<rect x="${x}" y="${top}" width="${w}" height="2" fill="black"/>`;
+      const [hr, mi] = hm(p.start);
+      if (mi === 0 && hr % (opts.compact ? 6 : 3) === 0) s += `<text x="${x}" y="${H - 4}" text-anchor="middle">${String(hr).padStart(2, "0")}</text>`;
+      if (mi === 0 && hr === 0 && i > 0) {
+        s += `<line x1="${x - gap / 2}" x2="${x - gap / 2}" y1="${padT - 6}" y2="${H - padB}" stroke="black" stroke-width="2"/>`;
+        if (!opts.compact) s += `<text x="${x + 3}" y="${padT - 6}" font-weight="bold">${p.start.toLocaleDateString("sv-SE", { weekday: "long", timeZone: "Europe/Stockholm" })}</text>`;
       }
-      if (i === minIdx && !opts.compact) s += `<text x="${x + w / 2}" y="${top - 6}" text-anchor="middle" font-weight="bold">${Math.round(h.ore)}</text>`;
+      if (i === minIdx && !opts.compact) {
+        // Label the lowest price above the tallest neighbouring bar so it doesn't collide.
+        const near = vals.slice(Math.max(0, i - 4), i + 5);
+        const ly = Math.max(y(Math.max(...near, 0)) - 6, padT + 10);
+        s += `<text x="${x + w / 2}" y="${ly}" text-anchor="middle" font-weight="bold">${Math.round(p.ore)}</text>`;
+      }
     });
-    // "now" marker over the first bar
     const nx = padL + cw / 2;
     s += `<path d="M ${nx - 7} 2 L ${nx + 7} 2 L ${nx} 13 Z" fill="black"/>`;
     s += "</svg>";
@@ -144,7 +150,7 @@
     if (c.day) set("day", c.round(c.day.min) + " / " + c.round(c.day.avg) + " / " + c.round(c.day.max));
     root.querySelectorAll('[data-ep="chart"]').forEach(el => window.elprisChart(el, c, E, {
       compact: el.dataset.compact === "true",
-      maxBars: parseInt(el.dataset.maxBars || "36", 10),
+      maxSlots: parseInt(el.dataset.maxSlots || "96", 10),
     }));
   };
 </script>

@@ -1,6 +1,6 @@
 # Elpris – billigaste timmarna
 
-Plugin för [TRMNL](https://trmnl.com) (e-pappersskärm). Spotpris på el för SE1–SE4 med priset just nu, när det blir billigare, det billigaste sammanhängande fönstret och ett stapeldiagram för i dag och i morgon.
+Plugin för [TRMNL](https://trmnl.com) (e-pappersskärm). Spotpris på el för SE1–SE4 med priset just nu, när det blir billigare, det billigaste sammanhängande fönstret och ett stapeldiagram med priset per kvart det kommande dygnet.
 
 ![Helskärm](preview/full.png)
 
