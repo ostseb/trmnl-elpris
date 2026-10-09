@@ -82,13 +82,13 @@
     const slots = c.slots.slice(0, opts.maxSlots || 96);
     if (!slots.length) { el.innerHTML = "<span class='description'>Inga priser tillgängliga</span>"; return; }
     const W = el.clientWidth, H = el.clientHeight;
-    const padL = 34, padB = opts.compact ? 18 : 24, padT = 22;
+    const padL = 38, padB = opts.compact ? 20 : 26, padT = 24;
     const vals = slots.map(p => p.ore);
     const max = Math.max(...vals, 1), min = Math.min(0, ...vals);
     const cw = (W - padL - 2) / slots.length;
     const gap = cw >= 4 ? 1 : 0;
     const y = v => padT + (H - padT - padB) * (1 - (v - min) / (max - min));
-    const fs = opts.compact ? 14 : 16;
+    const fs = opts.compact ? 16 : 18;
     const uid = "ep" + Math.random().toString(36).slice(2, 8); // pattern ids must be unique per mashup view
     let s = `<svg width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg" font-family="Inter, sans-serif" font-size="${fs}">`;
     s += `<defs>
